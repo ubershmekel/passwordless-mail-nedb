@@ -1,7 +1,8 @@
 {
   "name": "passwordless-mail-nedb",
+  "description": "Working passwordless example using NeDB",
   "private": false,
-  "version": "0.0.6",
+  "version": "0.0.7",
   "scripts": {
     "start": "node app.js"
   },
