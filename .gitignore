@@ -1,0 +1,5 @@
+/config.json
+/node_modules
+/users.nedb
+/sessions.nedb
+/.vscode

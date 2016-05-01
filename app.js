@@ -1,73 +1,130 @@
-var express = require('express');
 var path = require('path');
+var fs = require('fs');
+
+var express = require('express');
 var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var expressSession = require('express-session');
 var bodyParser = require('body-parser');
-
 var passwordless = require('passwordless');
-//var passwordless = require('../../');
-
-var MongoStore = require('passwordless-mongostore');
+var passwordlessNedb = require('passwordless-nedb')
+var nedb = require('nedb');
 var email   = require("emailjs");
 
 var routes = require('./routes/index');
 
 var app = express();
+var port = process.env.PORT || 3000;
+app.set('port', port);
 
-// TODO: email setup (has to be changed)
-var yourEmail = 'YOUR EMAIL TO SEND TOKENS';
-var yourPwd = 'YOUR PWD FOR THIS EMAIL';
-var yourSmtp = 'YOUR SMTP SUCH AS: smtp.gmail.com';
-var smtpServer  = email.server.connect({
-   user:    yourEmail, 
-   password: yourPwd, 
-   host:    yourSmtp, 
-   ssl:     true
-});
+// TODO: Update `host` to this webapp that's linked via email
+var host = 'http://localhost:' + port + '/';
 
-// TODO: MongoDB setup (given default can be used)
-var pathToMongoDb = 'mongodb://localhost/passwordless-simple-mail';
+///////////////////////////////////////////////////////////////////////////////
+// Setup configuration
+///////////////////////////////////////////////////////////////////////////////
+// TODO: Before you create 'config.json' this app will console.log the URLs to validate logins.
+// The config file should look like this.:
+/*
+{
+    smtp: {
+        user:     "DO NOT COMMIT THIS FILE WITH YOUR CREDENTIALS", 
+        password: "yourpassword", 
+        host:     "your smtp service host like smtp.gmail.com or smtp.sparkpostmail.com",
+        port:     465,
+        ssl:      true,
+        from:     "example@example.com"
+    }
+}
+*/
+var config = {};
+var configFileName = './config.json';
+try { 
+    fs.statSync(configFileName);
+    config = require(configFileName);
+} catch (err) {
+    console.log("Failed to load configuration: " + err);
+};
+var smtpServer = null;
+if(config.smtp)
+    smtpServer = email.server.connect(config.smtp);
 
-// TODO: Path to be send via email
-var host = 'http://localhost:3000/';
-
+///////////////////////////////////////////////////////////////////////////////
 // Setup of Passwordless
-passwordless.init(new MongoStore(pathToMongoDb));
-passwordless.addDelivery(
-    function(tokenToSend, uidToSend, recipient, callback) {
-        // Send out token
+///////////////////////////////////////////////////////////////////////////////
+var usersDB = new nedb({
+    filename: 'users.nedb',
+    autoload: true
+});
+var usersTokenStore = new passwordlessNedb(usersDB);
+passwordless.init(usersTokenStore, {
+    skipForceSessionSave: true
+});
+function deliverToken(tokenToSend, uidToSend, recipient, callback) {
+    var activationUrl = host + '?token=' + tokenToSend + '&uid=' + encodeURIComponent(uidToSend);
+    var text = 'Hello!\nYou can now access your account here: ' + activationUrl;
+    if(smtpServer) {
         smtpServer.send({
-           text:    'Hello!\nYou can now access your account here: ' 
-                + host + '?token=' + tokenToSend + '&uid=' + encodeURIComponent(uidToSend), 
-           from:    yourEmail, 
-           to:      recipient,
-           subject: 'Token for ' + host
+            text: text, 
+            from:    config.smtp.from, 
+            to:      recipient,
+            subject: 'Token for ' + host
         }, function(err, message) { 
             if(err) {
                 console.log(err);
             }
             callback(err);
         });
-    });
+    } else {
+        console.log("No SMTP server configured. Would have sent an email to: " + recipient);
+        console.log(text);
+        callback(null);
+    }
+}
+passwordless.addDelivery(deliverToken);
 
-// view engine setup
+///////////////////////////////////////////////////////////////////////////////
+// Express setup
+///////////////////////////////////////////////////////////////////////////////
+// view engine
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-// Standard express setup
 app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));
 app.use(cookieParser());
-app.use(expressSession({secret: '42', saveUninitialized: false, resave: false}));
-app.use(express.static(path.join(__dirname, 'public')));
+
+///////////////////////////////////////////////////////////////////////////////
+// Session store setup
+///////////////////////////////////////////////////////////////////////////////
+var NedbStore = require('nedb-session-store')( expressSession );
+var sessionStore = new NedbStore({
+    filename: './sessions.nedb'
+});
+var oneYearMs = 365 * 24 * 60 * 60 * 1000;
+var sessionWare = expressSession({
+    secret: 'horse staple correct',
+    saveUninitialized: false,
+    resave: false,
+    cookie: {
+        path: '/',
+        httpOnly: true,
+        maxAge: oneYearMs 
+    },    
+    store: sessionStore
+});
+app.use(sessionWare);
 
 // Passwordless middleware
 app.use(passwordless.sessionSupport());
 app.use(passwordless.acceptToken({ successRedirect: '/' }));
 
+///////////////////////////////////////////////////////////////////////////////
+// Routes setup 
+///////////////////////////////////////////////////////////////////////////////
 // CHECK /routes/index.js to better understand which routes are needed at a minimum
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/', routes);
 
 /// catch 404 and forward to error handler
@@ -77,7 +134,8 @@ app.use(function(req, res, next) {
     next(err);
 });
 
-// development error handler
+// Development error handler
+// Shows stack traces
 app.use(function(err, req, res, next) {
     res.status(err.status || 500);
     res.render('error', {
@@ -86,8 +144,6 @@ app.use(function(err, req, res, next) {
     });
 });
 
-app.set('port', process.env.PORT || 3000);
-
 var server = app.listen(app.get('port'), function() {
-  console.log('Express server listening on port ' + server.address().port);
+    console.log('Browse at: ' + host);
 });

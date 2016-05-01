@@ -4,18 +4,15 @@
     <link rel='stylesheet' href='/stylesheets/style.css' type='text/css'>
   </head>
   <body>
-    <h1>Passwordless - Example: Simple-Mail</h1>
-    <p>
-    User: 
-    <% if(user) { %>
-    	<%= user %> (<a href='/logout'>logout</a>)
-    <% } else { %>
-    	Not logged in
-    <% } %>
-    </p>
+    <h1>Passwordless example with email and NeDB</h1>
     <ul>
       <li>
-        <a href='/login'>Login / Register</a>
+        <% if(user) { %>
+            User: <%= user %> (<a href='/logout'>logout</a>)
+        <% } else { %>
+            Not logged in
+            <a href='/login'>Login / Register</a>
+        <% } %>
       </li>
       <li>
         <a href='/restricted'>Restricted page</a>

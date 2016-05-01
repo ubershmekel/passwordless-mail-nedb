@@ -1,7 +1,7 @@
 {
-  "name": "passwordless-simple-mail",
+  "name": "passwordless-mail-nedb",
   "private": "false",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "scripts": {
     "start": "node app.js"
   },
@@ -13,7 +13,9 @@
     "express": "~4.12.4",
     "express-session": "^1.11.3",
     "morgan": "~1.6.0",
+    "nedb": "^1.8.0",
+    "nedb-session-store": "^1.1.1",
     "passwordless": "*",
-    "passwordless-mongostore": "0.1.0"
+    "passwordless-nedb": "0.0.4"
   }
 }
